@@ -2550,7 +2550,7 @@ preludeMems
             ([isIn1 cBounded tChar] :=> 
              tChar)),
      [([],
-       elit (LitChar 'ÿ'))]),
+       elit (LitChar 'ï¿½'))]),
     ("v448",
      Just (Forall [Star, Star]
             ([isIn1 cFunctor tMaybe] :=> 
