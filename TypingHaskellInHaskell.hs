@@ -162,7 +162,7 @@ class Types t where
 
 instance Types Type where
   apply s (TVar u)  = case Map.lookup u s of
-                       Just t  -> t
+                       Just t  -> apply s t
                        Nothing -> TVar u
   apply s (TAp l r) = TAp (apply s l) (apply s r)
   apply s t         = t
@@ -181,7 +181,11 @@ instance (Ord a, Types b) => Types (Map.Map a b) where
 
 infixr 4 @@
 (@@)       :: Subst -> Subst -> Subst
-s1 @@ s2    = apply s1 s2 <> s1
+s1 @@ s2    = if s2' * log s1' > s1' + s2'
+                then apply s1 s2 <> s1
+                else s2 <> s1
+              where s1' = fromIntegral $ Map.size s1
+                    s2' = fromIntegral $ Map.size s2
 
 merge      :: Fail.MonadFail m => Subst -> Subst -> m Subst
 merge s1 s2 = if agree then return (s1 <> s2) else fail "merge fails"
