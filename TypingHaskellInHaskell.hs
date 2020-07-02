@@ -79,9 +79,14 @@ tIntId    = T.pack "Int"
 tFloatId  = T.pack "Float"
 tDoubleId = T.pack "Double"
 
+tPointerId = T.pack "@Pointer"
+tConstId = T.pack "@Const"
+tNULLId = T.pack "@NULL"
+
 tListId   = T.pack "[]"
 tArrowId  = T.pack "(->)"
 tTuple2Id = T.pack "(,)2"
+tTuple3Id = T.pack "(,,)3"
 
 cNumId    = T.pack "Num"
 
@@ -103,6 +108,16 @@ tInt     = TCon (Tycon tIntId Star)
 tFloat   = TCon (Tycon tFloatId Star)
 tDouble  = TCon (Tycon tDoubleId Star)
 
+tPointer = TCon (Tycon tPointerId (Kfun Star Star))
+tSize_t = tInt -- TODO: For simplicity's sake; in future implementations, change it
+tConst = TCon (Tycon tConstId (Kfun Star Star))
+tNULL = TCon (Tycon tNULLId Star)
+
+tList    = TCon (Tycon tListId (Kfun Star Star))
+tArrow   = TCon (Tycon tArrowId (Kfun Star (Kfun Star Star)))
+tTuple2  = TCon (Tycon tTuple2Id (Kfun Star (Kfun Star Star)))
+tTuple3 = TCon (Tycon tTuple3Id (Kfun Star (Kfun Star (Kfun Star Star))))
+
 -- CHM additions
 tError  = TCon (Tycon tErrorId Star)
 tVoid  = TCon (Tycon tVoidId Star)
@@ -114,10 +129,6 @@ tUnsig = TCon (Tycon tUnsigId Star)
 tBool = TCon (Tycon tBoolId Star)
 tComplex = TCon (Tycon tComplexId Star)
 tInt128 = TCon (Tycon tInt128Id Star)
-
-tList    = TCon (Tycon tListId (Kfun Star Star))
-tArrow   = TCon (Tycon tArrowId (Kfun Star (Kfun Star Star)))
-tTuple2  = TCon (Tycon tTuple2Id (Kfun Star (Kfun Star Star)))
 
 tString    :: Type
 tString     = list tChar
