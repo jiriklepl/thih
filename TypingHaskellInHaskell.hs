@@ -74,34 +74,34 @@ data Tycon = Tycon !Id Kind
 instance Ord Tycon where
   compare (Tycon id1 _) (Tycon id2 _) = compare id1 id2
 
-tUnitId   = T.pack "()"
-tCharId   = T.pack "Char"
-tIntId    = T.pack "Int"
-tFloatId  = T.pack "Float"
-tDoubleId = T.pack "Double"
+tUnitId     = T.pack "()"
+tCharId     = T.pack "Char"
+tIntId      = T.pack "Int"
+tFloatId    = T.pack "Float"
+tDoubleId   = T.pack "Double"
 
-tPointerId = T.pack "@Pointer"
-tConstId = T.pack "@Const"
-tNULLId = T.pack "@NULL"
+tPointerId  = T.pack "@Pointer"
+tConstId    = T.pack "@Const"
+tNULLId     = T.pack "@NULL"
 
-tListId   = T.pack "[]"
-tArrowId  = T.pack "(->)"
-tTuple2Id = T.pack "(,)2"
-tTuple3Id = T.pack "(,,)3"
+tListId     = T.pack "[]"
+tArrowId    = T.pack "(->)"
+tTuple2Id   = T.pack "(,)2"
+tTuple3Id   = T.pack "(,,)3"
 
-cNumId    = T.pack "Num"
+cNumId      = T.pack "Num"
 
 -- CHM additions
-tErrorId = T.pack "@Error"
-tVoidId = T.pack "Void"
-tShortId = T.pack "Short"
-tLongId = T.pack "Long"
+tErrorId    = T.pack "@Error"
+tVoidId     = T.pack "Void"
+tShortId    = T.pack "Short"
+tLongId     = T.pack "Long"
 tLongSpecId = T.pack "LongSpec"
-tSignedId = T.pack "Signed"
-tUnsigId = T.pack "Unsig"
-tBoolId = T.pack "Bool"
-tComplexId = T.pack "Complex"
-tInt128Id = T.pack "Int128"
+tSignedId   = T.pack "Signed"
+tUnsigId    = T.pack "Unsig"
+tBoolId     = T.pack "Bool"
+tComplexId  = T.pack "Complex"
+tInt128Id   = T.pack "Int128"
 
 tUnit    = TCon (Tycon tUnitId Star)
 tChar    = TCon (Tycon tCharId Star)
@@ -110,26 +110,26 @@ tFloat   = TCon (Tycon tFloatId Star)
 tDouble  = TCon (Tycon tDoubleId Star)
 
 tPointer = TCon (Tycon tPointerId (Kfun Star Star))
-tSize_t = tInt -- TODO: For simplicity's sake; in future implementations, change it
-tConst = TCon (Tycon tConstId (Kfun Star Star))
-tNULL = TCon (Tycon tNULLId Star)
+tSize_t  = tInt -- TODO: For simplicity's sake; in future implementations, change it
+tConst   = TCon (Tycon tConstId (Kfun Star Star))
+tNULL    = TCon (Tycon tNULLId Star)
 
 tList    = TCon (Tycon tListId (Kfun Star Star))
 tArrow   = TCon (Tycon tArrowId (Kfun Star (Kfun Star Star)))
 tTuple2  = TCon (Tycon tTuple2Id (Kfun Star (Kfun Star Star)))
-tTuple3 = TCon (Tycon tTuple3Id (Kfun Star (Kfun Star (Kfun Star Star))))
+tTuple3  = TCon (Tycon tTuple3Id (Kfun Star (Kfun Star (Kfun Star Star))))
 
 -- CHM additions
-tError  = TCon (Tycon tErrorId Star)
-tVoid  = TCon (Tycon tVoidId Star)
-tShort = TCon (Tycon tShortId Star)
-tLong = TCon (Tycon tLongId Star)
-tLongSpec = TCon (Tycon  tLongSpecId(Kfun Star Star))
-tSigned = TCon (Tycon tSignedId Star)
-tUnsig = TCon (Tycon tUnsigId Star)
-tBool = TCon (Tycon tBoolId Star)
+tError   = TCon (Tycon tErrorId Star)
+tVoid    = TCon (Tycon tVoidId Star)
+tShort   = TCon (Tycon tShortId Star)
+tLong    = TCon (Tycon tLongId Star)
+tLongSpec = TCon (Tycon tLongSpecId(Kfun Star Star))
+tSigned  = TCon (Tycon tSignedId Star)
+tUnsig   = TCon (Tycon tUnsigId Star)
+tBool    = TCon (Tycon tBoolId Star)
 tComplex = TCon (Tycon tComplexId Star)
-tInt128 = TCon (Tycon tInt128Id Star)
+tInt128  = TCon (Tycon tInt128Id Star)
 
 tString    :: Type
 tString     = list tChar
@@ -487,9 +487,9 @@ tiLit LitVoid  = return ([], tVoid)  -- (CHM)
 -- Pat:		Patterns
 -----------------------------------------------------------------------------
 
-data Pat        = PVar !Id
-                | PCon !Assump ![Pat]
-                deriving(Show)
+data Pat = PVar !Id
+         | PCon !Assump ![Pat]
+         deriving(Show)
 
 tiPat :: Pat -> TI ([Pred], Map.Map Id Scheme, Type)
 
@@ -506,9 +506,9 @@ tiPats     :: [Pat] -> TI ([Pred], Map.Map Id Scheme, [Type])
 tiPats pats = do
   psasts <- tiPat `mapM` pats
   let
-    ps = concat [ps' | (ps', _, _) <- psasts]
-    as = Map.unions [as' | (_, as', _) <- psasts]
-    ts = [t | (_, _, t) <- psasts]
+    ps = concat [ ps' | (ps', _, _) <- psasts ]
+    as = Map.unions [ as' | (_, as', _) <- psasts ]
+    ts = [ t | (_, _, t) <- psasts ]
   return (ps, as, ts)
 
 -----------------------------------------------------------------------------
@@ -552,7 +552,7 @@ type Alt = ([Pat], Expr)
 
 tiAlt                :: Infer Alt Type
 tiAlt ce as (pats, e) = do (ps, as', ts) <- tiPats pats
-                           (qs, t)  <- tiExpr ce (as' <> as) e
+                           (qs, t)       <- tiExpr ce (as' <> as) e
                            return (ps <> qs, foldr' fn t ts)
 
 tiAlts             :: ClassEnv -> Map.Map Id Scheme -> [Alt] -> Type -> TI [Pred]
@@ -569,7 +569,7 @@ split ce fs gs ps = do ps' <- reduce ce ps
                        rs' <- defaultedPreds ce (fs <> gs) rs
                        return (ds, rs \\ rs')
 
-type Ambiguity       = (Tyvar, [Pred])
+type Ambiguity = (Tyvar, [Pred])
 
 ambiguities         :: ClassEnv -> Set.Set Tyvar -> [Pred] -> [Ambiguity]
 ambiguities ce vs ps = [ (v, filter (elem v . tv) ps) | v <- Set.toList $ tv ps Set.\\ vs ]
@@ -633,10 +633,10 @@ tiExpl ce as (i, sc, alts)
 
 -----------------------------------------------------------------------------
 
-type Impl   = (Id, [Alt])
+type Impl = (Id, [Alt])
 
-restricted   :: [Impl] -> Bool
-restricted = any simple
+restricted :: [Impl] -> Bool
+restricted  = any simple
  where simple (i, alts) = any (null . fst) alts
 
 tiImpls         :: Infer [Impl] (Map.Map Id Scheme)
@@ -664,7 +664,7 @@ tiImpls ce as bs = do ts <- replicateM (length bs) (newTVar Star)
 
 -----------------------------------------------------------------------------
 
-type BindGroup  = ([Expl], [[Impl]])
+type BindGroup = ([Expl], [[Impl]])
 
 tiBindGroup :: Infer BindGroup (Map.Map Id Scheme)
 tiBindGroup ce as (es, iss) =
