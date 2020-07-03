@@ -30,6 +30,7 @@ import Data.Foldable hiding (find)
 import Data.List (partition, (\\))
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 
 import qualified Data.ByteString.Char8 as T
 
@@ -168,23 +169,25 @@ nullSubst   = mempty
 u +-> t     = Map.singleton u t
 
 class Types t where
+  {-# MINIMAL apply, (tv | tv') #-}
   apply :: Subst -> t -> t
+  tv'   :: t -> Set.Set Tyvar -> Set.Set Tyvar
   tv    :: t -> Set.Set Tyvar
+  tv     = (`tv'` mempty)
+  tv'    = flip $ const tv
 
 instance Types Type where
-  apply s (TVar u)  = case Map.lookup u s of
-                       Just t  -> t
-                       Nothing -> TVar u
+  apply s t@(TVar u)  = fromMaybe t $ Map.lookup u s
   apply s (TAp l r) = TAp (apply s l) (apply s r)
   apply s t         = t
 
-  tv (TVar u)  = Set.singleton u
-  tv (TAp l r) = tv l <> tv r
-  tv t         = mempty
+  tv' (TVar u)  = (u `Set.insert`)
+  tv' (TAp l r) = tv' r . tv' l
+  tv' t         = id
 
 instance Types a => Types [a] where
   apply s = (apply s <$>)
-  tv      = Set.unions . (tv <$>)
+  tv'     = flip $ foldr' tv'
 
 instance (Ord a, Types b) => Types (Map.Map a b) where
   apply s = (apply s <$>)
@@ -242,11 +245,11 @@ data Pred   = IsIn !Id Type
 
 instance Types t => Types (Qual t) where
   apply s (ps :=> t) = apply s ps :=> apply s t
-  tv (ps :=> t)      = tv ps <> tv t
+  tv' (ps :=> t)     = tv' ps . tv' t
 
 instance Types Pred where
   apply s (IsIn i t) = IsIn i (apply s t)
-  tv (IsIn i t)      = tv t
+  tv' (IsIn i t)     = tv' t
 
 mguPred, matchPred :: Pred -> Pred -> Maybe Subst
 mguPred             = lift mgu
@@ -367,7 +370,7 @@ data Scheme = Forall ![Kind] !(Qual Type)
 
 instance Types Scheme where
   apply s (Forall ks qt) = Forall ks (apply s qt)
-  tv (Forall ks qt)      = tv qt
+  tv' (Forall ks qt)     = tv' qt
 
 quantify      :: Set.Set Tyvar -> Qual Type -> Scheme
 quantify vs qt = Forall ks (apply s qt)
@@ -388,7 +391,7 @@ data Assump = Id :>: Scheme
 
 instance Types Assump where
   apply s (i :>: sc) = i :>: apply s sc
-  tv (i :>: sc)      = tv sc
+  tv' (i :>: sc)     = tv' sc
 
 find :: Fail.MonadFail m => Id -> Map.Map Id Scheme -> m Scheme
 find i as = maybe errorMSG return $ i `Map.lookup` as
