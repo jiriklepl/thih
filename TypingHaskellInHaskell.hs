@@ -23,6 +23,7 @@
 -- file version.
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE FlexibleInstances #-}
 
 module TypingHaskellInHaskell where
 
@@ -36,6 +37,8 @@ import qualified Data.ByteString.Char8 as T
 
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
+import Control.Monad.State hiding (lift)
+import Control.Monad.Trans.Except
 
 import Control.Applicative (Applicative(..))
 
@@ -45,8 +48,10 @@ import Control.Applicative (Applicative(..))
 
 type Id  = T.ByteString
 
-enumId  :: Int -> Id
-enumId n = T.pack $ 'v' : show n
+enumId  :: TI Id
+enumId = do state@TI{ num = n } <- get
+            put state{ num = n + 1 }
+            return . T.pack $ '@' : show n
 
 -----------------------------------------------------------------------------
 -- Kind:		Kinds
@@ -80,7 +85,7 @@ tIntId      = T.pack "Int"
 tFloatId    = T.pack "Float"
 tDoubleId   = T.pack "Double"
 
-tPointerId  = T.pack "@Pointer"
+tPointerId  = T.pack "(*)"
 tConstId    = T.pack "@Const"
 tNULLId     = T.pack "@NULL"
 
@@ -91,7 +96,6 @@ tTuple3Id   = T.pack "(,,)3"
 
 cNumId      = T.pack "Num"
 
--- CHM additions
 tErrorId    = T.pack "@Error"
 tVoidId     = T.pack "Void"
 tShortId    = T.pack "Short"
@@ -287,8 +291,8 @@ defined :: Maybe a -> Bool
 defined Just{} = True
 defined Nothing  = False
 
-modify       :: ClassEnv -> Id -> Class -> ClassEnv
-modify ce i c = ce{classes = Map.insert i c $ classes ce}
+change       :: ClassEnv -> Id -> Class -> ClassEnv
+change ce i c = ce{classes = Map.insert i c $ classes ce}
 
 initialEnv :: ClassEnv
 initialEnv  = ClassEnv { classes  = mempty,
@@ -305,13 +309,13 @@ addClass                              :: Id -> [Id] -> EnvTransformer
 addClass i is ce
  | defined (i `Map.lookup` classes ce) = fail "class already defined"
  | not (all (defined . (`Map.lookup` classes ce)) is) = fail "superclass not defined"
- | otherwise                           = return (modify ce i (is, []))
+ | otherwise                           = return (change ce i (is, []))
 
 addInst                        :: [Pred] -> Pred -> EnvTransformer
 addInst ps p@(IsIn i _) ce
  | not (defined (i `Map.lookup` classes ce)) = fail "no class for instance"
  | any (overlap p) qs           = fail "overlapping instance"
- | otherwise                    = return (modify ce i c)
+ | otherwise                    = return (change ce i c)
    where its = insts ce i
          qs  = [ q | (_ :=> q) <- its ]
          c   = (super ce i, (ps:=>p) : its)
@@ -407,43 +411,29 @@ find i as = maybe errorMSG return $ i `Map.lookup` as
 -- TIMonad:	Type inference monad
 -----------------------------------------------------------------------------
 
-newtype TI a = TI (Subst -> Int -> (Subst, Int, a))
+data TIState = TI { subst :: !Subst
+                  , num :: !Int }
 
-instance Fail.MonadFail TI where
-  fail = error
+type TI = StateT TIState (Either String)
 
-instance Monad TI where
-  return x   = TI (\s n -> (s, n, x))
-  TI f >>= g = TI (\s n -> case f s n of
-                            (s', m, x) -> let TI gx = g x
-                                        in  gx s' m)
-
-instance Applicative TI where
-  pure                   = return
-  liftA2 f (TI g) (TI h) = TI (\s n -> let (s', n', x) = g s n
-                                           (s'', n'', y) = h s' n'
-                                       in (s'', n'', f x y))
-
-instance Functor TI where
-  fmap f xs = f <$> xs
+instance MonadFail (Either String) where
+  fail = Left
 
 runTI       :: TI a -> a
-runTI (TI f) = x where (s, n, x) = f nullSubst 0
-
-getSubst   :: TI Subst
-getSubst    = TI (\s n -> (s, n, s))
+runTI f = case evalStateT f $ TI nullSubst 0 of
+  Right a -> a
+  Left s -> error s
 
 unify      :: Type -> Type -> TI ()
-unify t1 t2 = do s <- getSubst
+unify t1 t2 = do s <- gets subst
                  u <- mgu (apply s t1) (apply s t2)
                  extSubst u
 
 extSubst   :: Subst -> TI ()
-extSubst s' = TI (\s n -> (s' @@ s, n, ()))
+extSubst s' = modify (\state -> state{ subst = s' @@ subst state })
 
 newTVar    :: Kind -> TI Type
-newTVar k   = TI (\s n -> let v = Tyvar (enumId n) k
-                          in  (s, n + 1, TVar v))
+newTVar k   = TVar . flip Tyvar k <$> enumId
 
 freshInst               :: Scheme -> TI (Qual Type)
 freshInst (Forall ks qt) = do ts <- newTVar `mapM` ks
@@ -619,7 +609,7 @@ tiExpl :: ClassEnv -> Map.Map Id Scheme -> Expl -> TI [Pred]
 tiExpl ce as (i, sc, alts)
         = do (qs :=> t) <- freshInst sc
              ps         <- tiAlts ce as alts t
-             s          <- getSubst
+             s          <- gets subst
              let qs'     = apply s qs
                  t'      = apply s t
                  fs      = tv (apply s as)
@@ -629,7 +619,7 @@ tiExpl ce as (i, sc, alts)
              (ds, rs)    <- split ce fs gs ps'
              if sc /= sc' then
                  fail $
-                    "signature `" <> show sc <>
+                    "scheme `" <> show sc <>
                     "` of `" <> show i <>
                     "` incompatible with `" <> show sc' <> "`"
                else if not (null rs) then
@@ -653,7 +643,7 @@ tiImpls ce as bs = do ts <- replicateM (length bs) (newTVar Star)
                           as'   = zIs scs <> as
                           altss = snd <$> bs
                       pss <- zipWithM (tiAlts ce as') altss ts
-                      s   <- getSubst
+                      s   <- gets subst
                       let ps'     = apply s (concat pss)
                           ts'     = apply s ts
                           fs      = tv (apply s as)
@@ -695,7 +685,7 @@ type Program = [BindGroup]
 tiProgram :: ClassEnv -> Map.Map Id Scheme -> Program -> Map.Map Id Scheme
 tiProgram ce as bgs = runTI $
                       do (ps, as') <- tiSeq tiBindGroup ce as bgs
-                         s         <- getSubst
+                         s         <- gets subst
                          rs        <- reduce ce (apply s ps)
                          s'        <- defaultSubst ce mempty rs
                          return (apply (s' @@ s) as')
