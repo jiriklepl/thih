@@ -500,13 +500,8 @@ tiPat (PCon (i:>:sc) pats) = do (ps, as, ts) <- tiPats pats
                                 return (ps <> qs, as, t')
 
 tiPats     :: [Pat] -> TI ([Pred], Map.Map Id Scheme, [Type])
-tiPats pats = do
-  psasts <- tiPat `mapM` pats
-  let
-    pss = [ ps | (ps, _, _) <- psasts ]
-    ass = [ as | (_, as, _) <- psasts ]
-    ts  = [ t  | (_, _, t)  <- psasts ]
-  return (concat pss, Map.unions ass, ts)
+tiPats pats = do (pss, ass, ts) <- unzip3 <$> tiPat `mapM` pats
+                 return (concat pss, Map.unions ass, ts)
 
 -----------------------------------------------------------------------------
 
