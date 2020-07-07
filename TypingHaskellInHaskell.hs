@@ -114,7 +114,7 @@ tFloat   = TCon (Tycon tFloatId Star)
 tDouble  = TCon (Tycon tDoubleId Star)
 
 tPointer = TCon (Tycon tPointerId (Kfun Star Star))
-tSize_t  = tInt -- TODO: For simplicity's sake; in future implementations, change it
+tSize_t  = tInt -- TODO: Just for simplicity
 tConst   = TCon (Tycon tConstId (Kfun Star Star))
 tNULL    = TCon (Tycon tNULLId Star)
 
@@ -123,7 +123,6 @@ tArrow   = TCon (Tycon tArrowId (Kfun Star (Kfun Star Star)))
 tTuple2  = TCon (Tycon tTuple2Id (Kfun Star (Kfun Star Star)))
 tTuple3  = TCon (Tycon tTuple3Id (Kfun Star (Kfun Star (Kfun Star Star))))
 
--- CHM additions
 tError   = TCon (Tycon tErrorId Star)
 tVoid    = TCon (Tycon tVoidId Star)
 tShort   = TCon (Tycon tShortId Star)
@@ -164,13 +163,13 @@ instance HasKind Type where
 -- Subst:	Substitutions
 -----------------------------------------------------------------------------
 
-type Subst  = Map.Map Tyvar Type
+type Subst = Map.Map Tyvar Type
 
-nullSubst  :: Subst
-nullSubst   = mempty
+nullSubst :: Subst
+nullSubst  = mempty
 
-(+->)      :: Tyvar -> Type -> Subst
-u +-> t     = Map.singleton u t
+(+->)     :: Tyvar -> Type -> Subst
+u +-> t    = Map.singleton u t
 
 class Types t where
   {-# MINIMAL apply, (tv | tv') #-}
@@ -181,11 +180,11 @@ class Types t where
   tv'    = flip $ const tv
 
 instance Types Type where
-  apply s t@(TVar u)  = case Map.lookup u s of
+  apply s t@(TVar u) = case Map.lookup u s of
                          Just t'  -> apply s t'
                          Nothing -> t
-  apply s (TAp l r) = TAp (apply s l) (apply s r)
-  apply s t         = t
+  apply s (TAp l r)  = TAp (apply s l) (apply s r)
+  apply s t          = t
 
   tv' (TVar u)  = (u `Set.insert`)
   tv' (TAp l r) = tv' r . tv' l
@@ -209,8 +208,8 @@ s1 @@ s2    = if s2' * log s1' > s1' + s2'
 
 merge      :: Fail.MonadFail m => Subst -> Subst -> m Subst
 merge s1 s2 = if agree then return (s1 <> s2) else fail "merge fails"
- where agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v))
-                   (Map.keysSet s1 `Set.intersection` Map.keysSet s2)
+  where agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v))
+                    (Map.keysSet s1 `Set.intersection` Map.keysSet s2)
 
 -----------------------------------------------------------------------------
 -- Unify:	Unification
@@ -222,23 +221,31 @@ varBind :: Fail.MonadFail m => Tyvar -> Type -> m Subst
 mgu (TAp l r) (TAp l' r') = do s1 <- mgu l l'
                                s2 <- mgu (apply s1 r) (apply s1 r')
                                return (s2 @@ s1)
-mgu (TVar u) t        = varBind u t
-mgu t (TVar u)        = varBind u t
+mgu (TVar u) t = varBind u t
+mgu t (TVar u) = varBind u t
 mgu (TCon tc1) (TCon tc2)
-           | tc1 == tc2 = return nullSubst
-mgu t1 t2             = fail $ "types `" <> show t1 <> "` and `" <> show t2 <> "` do not unify"
+  | tc1 == tc2 = return nullSubst
+mgu t1 t2      = fail $
+                   "types of: `" <> show t1 <>
+                   "` and `" <> show t2 <>
+                   "` do not unify"
 
-varBind u t | t == TVar u      = return nullSubst
-            | u `elem` tv t    = fail "occurs check fails"
-            | kind u /= kind t = fail $ "kinds of `" <> show u <> "` and `" <> show t <> "` do not match"
-            | otherwise        = return (u +-> t)
+varBind u t
+  | t == TVar u      = return nullSubst
+  | u `elem` tv t    = fail "occurs check fails"
+  | kind u /= kind t = fail $
+                         "kinds of `" <> show u <>
+                         "` and `" <> show t <>
+                         "` do not match"
+  | otherwise        = return (u +-> t)
 
 match :: Fail.MonadFail m => Type -> Type -> m Subst
 
 match (TAp l r) (TAp l' r') = do sl <- match l l'
                                  sr <- match r r'
                                  merge sl sr
-match (TVar u)   t | kind u == kind t = return (u +-> t)
+match (TVar u) t
+         | kind u == kind t = return (u +-> t)
 match (TCon tc1) (TCon tc2)
          | tc1 == tc2       = return nullSubst
 match t1 t2                 = fail "types do not match"
@@ -255,19 +262,19 @@ data Pred   = IsIn !Id Type
 
 instance Types t => Types (Qual t) where
   apply s (ps :=> t) = apply s ps :=> apply s t
-  tv' (ps :=> t)     = tv' ps . tv' t
+  tv'     (ps :=> t) = tv' ps . tv' t
 
 instance Types Pred where
   apply s (IsIn i t) = IsIn i (apply s t)
-  tv' (IsIn i t)     = tv' t
+  tv'     (IsIn i t) = tv' t
 
 mguPred, matchPred :: Pred -> Pred -> Maybe Subst
 mguPred             = lift mgu
 matchPred           = lift match
 
 lift m (IsIn i t) (IsIn i' t')
-         | i == i'   = m t t'
-         | otherwise = fail "classes differ"
+        | i == i'   = m t t'
+        | otherwise = fail "classes differ"
 
 type Class    = ([Id], [Inst])
 type Inst     = Qual Pred
@@ -278,12 +285,12 @@ data ClassEnv = ClassEnv { classes  :: Map.Map Id Class,
                            defaults :: [Type] }
 
 super     :: ClassEnv -> Id -> [Id]
-super ce i = case i `Map.lookup` classes ce of
+super ce i = case classes ce Map.!? i of
   Just (is, its) -> is
   Nothing -> error "class not defined" -- TODO
 
 insts     :: ClassEnv -> Id -> [Inst]
-insts ce i = case i `Map.lookup` classes ce of
+insts ce i = case classes ce Map.!? i of
   Just (is, its) -> its
   Nothing -> error "class not defined" -- TODO
 
@@ -305,17 +312,17 @@ infixr 5 <:>
 (f <:> g) ce = do ce' <- f ce
                   g ce'
 
-addClass                              :: Id -> [Id] -> EnvTransformer
+addClass                               :: Id -> [Id] -> EnvTransformer
 addClass i is ce
- | defined (i `Map.lookup` classes ce) = fail "class already defined"
- | not (all (defined . (`Map.lookup` classes ce)) is) = fail "superclass not defined"
- | otherwise                           = return (change ce i (is, []))
+  | defined (classes ce Map.!? i)                = fail "class already defined"
+  | not (all (defined . (classes ce Map.!?)) is) = fail "superclass not defined"
+  | otherwise                                    = return (change ce i (is, []))
 
-addInst                        :: [Pred] -> Pred -> EnvTransformer
+addInst                         :: [Pred] -> Pred -> EnvTransformer
 addInst ps p@(IsIn i _) ce
- | not (defined (i `Map.lookup` classes ce)) = fail "no class for instance"
- | any (overlap p) qs           = fail "overlapping instance"
- | otherwise                    = return (change ce i c)
+  | not (defined (classes ce Map.!? i)) = fail "no class for instance"
+  | any (overlap p) qs                  = fail "overlapping instance"
+  | otherwise                           = return (change ce i c)
    where its = insts ce i
          qs  = [ q | (_ :=> q) <- its ]
          c   = (super ce i, (ps:=>p) : its)
@@ -327,12 +334,12 @@ overlap p q    = defined (mguPred p q)
 
 bySuper :: ClassEnv -> Pred -> [Pred]
 bySuper ce p@(IsIn i t)
- = p : concat [ bySuper ce (IsIn i' t) | i' <- super ce i ]
+  = p : concat [ bySuper ce (IsIn i' t) | i' <- super ce i ]
 
-byInst                   :: ClassEnv -> Pred -> Maybe [Pred]
-byInst ce p@(IsIn i t)    = msum [ tryInst it | it <- insts ce i ]
- where tryInst (ps :=> h) = do u <- matchPred h p
-                               Just $ apply u <$> ps
+byInst                    :: ClassEnv -> Pred -> Maybe [Pred]
+byInst ce p@(IsIn i t)     = msum [ tryInst it | it <- insts ce i ]
+  where tryInst (ps :=> h) = do u <- matchPred h p
+                                Just $ apply u <$> ps
 
 entail        :: ClassEnv -> [Pred] -> Pred -> Bool
 entail ce ps p = any ((p `elem`) . bySuper ce) ps ||
@@ -342,11 +349,11 @@ entail ce ps p = any ((p `elem`) . bySuper ce) ps ||
 
 -----------------------------------------------------------------------------
 
-inHnf       :: Pred -> Bool
+inHnf           :: Pred -> Bool
 inHnf (IsIn c t) = hnf t
- where hnf (TVar v)  = True
-       hnf (TCon tc) = False
-       hnf (TAp t _) = hnf t
+  where hnf (TVar v)  = True
+        hnf (TCon tc) = False
+        hnf (TAp t _) = hnf t
 
 toHnfs      :: Fail.MonadFail m => ClassEnv -> [Pred] -> m [Pred]
 toHnfs ce ps = do pss <- toHnf ce `mapM` ps
@@ -360,9 +367,9 @@ toHnf ce p | inHnf p   = return [p]
 
 simplify   :: ClassEnv -> [Pred] -> [Pred]
 simplify ce = loop []
- where loop rs []                            = rs
-       loop rs (p:ps) | entail ce (rs <> ps) p = loop rs ps
-                      | otherwise            = loop (p:rs) ps
+  where loop rs []                            = rs
+        loop rs (p:ps) | entail ce (rs<>ps) p = loop rs ps
+                       | otherwise            = loop (p:rs) ps
 
 reduce      :: Fail.MonadFail m => ClassEnv -> [Pred] -> m [Pred]
 reduce ce ps = do qs <- toHnfs ce ps
@@ -380,14 +387,14 @@ data Scheme = Forall ![Kind] !(Qual Type)
 
 instance Types Scheme where
   apply s (Forall ks qt) = Forall ks (apply s qt)
-  tv' (Forall ks qt)     = tv' qt
+  tv'     (Forall ks qt) = tv' qt
 
 quantify      :: Set.Set Tyvar -> Qual Type -> Scheme
 quantify vs qt = Forall ks (apply s qt)
- where vs' = Set.filter (`elem` vs) (tv qt)
-       vs'' = Set.toList vs'
-       ks  = kind <$> vs''
-       s   = Map.fromList . zip vs'' $ TGen <$> [0..]
+  where vs'  = Set.filter (`elem` vs) (tv qt)
+        vs'' = Set.toList vs'
+        ks   = kind <$> vs''
+        s    = Map.fromList . zip vs'' $ TGen <$> [0..]
 
 toScheme      :: Type -> Scheme
 toScheme t     = Forall [] ([] :=> t)
@@ -401,10 +408,10 @@ data Assump = Id :>: Scheme
 
 instance Types Assump where
   apply s (i :>: sc) = i :>: apply s sc
-  tv' (i :>: sc)     = tv' sc
+  tv'     (i :>: sc) = tv' sc
 
 find :: Fail.MonadFail m => Id -> Map.Map Id Scheme -> m Scheme
-find i as = maybe errorMSG return $ i `Map.lookup` as
+find i as = maybe errorMSG return $ as Map.!? i
   where errorMSG = fail $ "unbound identifier: " <> T.unpack i
 
 -----------------------------------------------------------------------------
@@ -421,8 +428,8 @@ instance MonadFail (Either String) where
 
 runTI       :: TI a -> a
 runTI f = case evalStateT f $ TI nullSubst 0 of
-  Right a -> a
-  Left s -> error s
+            Right a -> a
+            Left s -> error s
 
 unify      :: Type -> Type -> TI ()
 unify t1 t2 = do s <- gets subst
@@ -466,18 +473,18 @@ type Infer e t = ClassEnv -> Map.Map Id Scheme -> e -> TI ([Pred], t)
 
 data Literal = LitInt   Integer
              | LitChar  Char
-             | LitFloat String  -- (CHM) added like this to mirror the Language.C definition
+             | LitFloat String
              | LitStr   String
              | LitVoid
              deriving(Show)
 
-tiLit            :: Literal -> TI ([Pred], Type)
-tiLit (LitChar _) = return ([], tChar)
-tiLit (LitInt _)  = do v <- newTVar Star
-                       return ([IsIn cNumId v], v)
-tiLit (LitStr _)  = return ([], tString)
-tiLit (LitFloat _)  = return ([], tFloat)  -- (CHM)
-tiLit LitVoid  = return ([], tVoid)  -- (CHM)
+tiLit           :: Literal -> TI ([Pred], Type)
+tiLit LitChar{}  = return ([], tChar)
+tiLit LitInt{}   = do v <- newTVar Star
+                      return ([IsIn cNumId v], v)
+tiLit LitStr{}   = return ([], tString)
+tiLit LitFloat{} = return ([], tFloat)
+tiLit LitVoid    = return ([], tVoid)
 
 -----------------------------------------------------------------------------
 -- Pat:		Patterns
@@ -502,18 +509,18 @@ tiPats     :: [Pat] -> TI ([Pred], Map.Map Id Scheme, [Type])
 tiPats pats = do
   psasts <- tiPat `mapM` pats
   let
-    ps = concat [ ps' | (ps', _, _) <- psasts ]
-    as = Map.unions [ as' | (_, as', _) <- psasts ]
-    ts = [ t | (_, _, t) <- psasts ]
-  return (ps, as, ts)
+    pss = [ ps | (ps, _, _) <- psasts ]
+    ass = [ as | (_, as, _) <- psasts ]
+    ts  = [ t  | (_, _, t)  <- psasts ]
+  return (concat pss, Map.unions ass, ts)
 
 -----------------------------------------------------------------------------
 
-data Expr = Var   !Id
-          | Lit   !Literal
-          | Const !Assump
-          | Ap    !Expr !Expr
-          | Let   !BindGroup !Expr
+data Expr = Var    !Id
+          | Lit    !Literal
+          | Const  !Assump
+          | Ap     !Expr !Expr
+          | Let    !BindGroup !Expr
           | Lambda !Alt
           | LambdaScheme !Scheme !Alt
           deriving(Show)
@@ -559,7 +566,7 @@ tiAlts ce as alts t = do psts <- tiAlt ce as `mapM` alts
 -----------------------------------------------------------------------------
 
 split :: Fail.MonadFail m => ClassEnv -> Set.Set Tyvar -> Set.Set Tyvar -> [Pred]
-                      -> m ([Pred], [Pred])
+           -> m ([Pred], [Pred])
 split ce fs gs ps = do ps' <- reduce ce ps
                        let (ds, rs) = partition (all (`elem` fs) . tv) ps'
                        rs' <- defaultedPreds ce (fs <> gs) rs
@@ -572,11 +579,11 @@ ambiguities ce vs ps = [ (v, filter (elem v . tv) ps) | v <- Set.toList $ tv ps 
 
 numClasses :: [Id]
 numClasses  = T.pack <$> ["Num", "Integral", "Floating", "Fractional",
-               "Real", "RealFloat", "RealFrac"]
+                          "Real", "RealFloat", "RealFrac"]
 
 stdClasses :: [Id]
 stdClasses  = (T.pack <$> ["Eq", "Ord", "Show", "Read", "Bounded", "Enum", "Ix",
-               "Functor", "Monad", "MonadPlus"]) <> numClasses
+                           "Functor", "Monad", "MonadPlus"]) <> numClasses
 
 candidates           :: ClassEnv -> Ambiguity -> [Type]
 candidates ce (v, qs) = [ t' | let is = [ i | IsIn i t <- qs ]
@@ -590,10 +597,10 @@ candidates ce (v, qs) = [ t' | let is = [ i | IsIn i t <- qs ]
 withDefaults :: Fail.MonadFail m => ([Ambiguity] -> [Type] -> a)
                   -> ClassEnv -> Set.Set Tyvar -> [Pred] -> m a
 withDefaults f ce vs ps
-    | any null tss  = fail "cannot resolve ambiguity"
-    | otherwise     = return . f vps $ head <$> tss
-      where vps = ambiguities ce vs ps
-            tss = candidates ce <$> vps
+  | any null tss  = fail "cannot resolve ambiguity"
+  | otherwise     = return . f vps $ head <$> tss
+    where vps = ambiguities ce vs ps
+          tss = candidates ce <$> vps
 
 defaultedPreds :: Fail.MonadFail m => ClassEnv -> Set.Set Tyvar -> [Pred] -> m [Pred]
 defaultedPreds  = withDefaults $ const . concatMap snd
@@ -616,7 +623,7 @@ tiExpl ce as (i, sc, alts)
                  gs      = tv t' Set.\\ fs
                  sc'     = quantify gs (qs':=>t')
                  ps'     = filter (not . entail ce qs') (apply s ps)
-             (ds, rs)    <- split ce fs gs ps'
+             (ds, rs)   <- split ce fs gs ps'
              if sc /= sc' then
                  fail $
                     "scheme `" <> show sc <>
@@ -633,22 +640,22 @@ type Impl = (Id, [Alt])
 
 restricted :: [Impl] -> Bool
 restricted  = any simple
- where simple (i, alts) = any (null . fst) alts
+  where simple (i, alts) = any (null . fst) alts
 
 tiImpls         :: Infer [Impl] (Map.Map Id Scheme)
-tiImpls ce as bs = do ts <- replicateM (length bs) (newTVar Star)
-                      let zIs = Map.fromList . zip is
+tiImpls ce as bs = do ts       <- replicateM (length bs) (newTVar Star)
+                      let zIs   = Map.fromList . zip is
                           is    = fst <$> bs
                           scs   = toScheme <$> ts
                           as'   = zIs scs <> as
                           altss = snd <$> bs
-                      pss <- zipWithM (tiAlts ce as') altss ts
-                      s   <- gets subst
-                      let ps'     = apply s (concat pss)
-                          ts'     = apply s ts
-                          fs      = tv (apply s as)
-                          vss     = tv <$> ts'
-                          gs      = Set.unions vss Set.\\ fs
+                      pss      <- zipWithM (tiAlts ce as') altss ts
+                      s        <- gets subst
+                      let ps'   = apply s (concat pss)
+                          ts'   = apply s ts
+                          fs    = tv (apply s as)
+                          vss   = tv <$> ts'
+                          gs    = Set.unions vss Set.\\ fs
                       (ds, rs) <- split ce fs (foldl1 Set.intersection vss) ps'
                       if restricted bs then
                           let gs'  = gs Set.\\ tv rs
@@ -664,7 +671,7 @@ type BindGroup = ([Expl], [[Impl]])
 
 tiBindGroup :: Infer BindGroup (Map.Map Id Scheme)
 tiBindGroup ce as (es, iss) =
-  do let as' = Map.fromList [ (v, sc) | (v, sc, alts) <- es ]
+  do let as' = Map.unions [ Map.singleton v sc | (v, sc, alts) <- es ]
          as_ = as' <> as
      (ps, as'') <- tiSeq tiImpls ce as_ iss
      qss        <- tiExpl ce (as'' <> as_) `mapM` es
