@@ -183,7 +183,7 @@ class Types t where
 instance Types Type where
   apply s t@(TVar u)  = case Map.lookup u s of
                          Just t'  -> apply s t'
-                         Nothing -> TVar u
+                         Nothing -> t
   apply s (TAp l r) = TAp (apply s l) (apply s r)
   apply s t         = t
 
