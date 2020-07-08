@@ -22,6 +22,7 @@ library
   build-depends:     base >= 4.12 && < 5,
                      bytestring >= 0.10 && < 1,
                      mtl >= 2.2 && < 3,
+                     combinat >= 0.2.9 && < 1,
                      transformers >= 0.5 && < 1,
                      containers >= 0.6 && < 1
   hs-source-dirs:    .
