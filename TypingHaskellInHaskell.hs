@@ -226,7 +226,7 @@ mgu t (TVar u) = varBind u t
 mgu (TCon tc1) (TCon tc2)
   | tc1 == tc2 = return nullSubst
 mgu t1 t2      = fail $
-                   "types of: `" <> show t1 <>
+                   "types `" <> show t1 <>
                    "` and `" <> show t2 <>
                    "` do not unify"
 
