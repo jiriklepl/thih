@@ -42,6 +42,8 @@ import Control.Monad.Trans.Except
 
 import Control.Applicative (Applicative(..))
 
+import qualified Math.Combinat.Permutations as Perm
+
 -----------------------------------------------------------------------------
 -- Id:		Identifiers
 -----------------------------------------------------------------------------
@@ -283,6 +285,7 @@ type Inst     = Qual Pred
 
 data ClassEnv = ClassEnv { classes  :: Map.Map Id Class,
                            defaults :: [Type] }
+                deriving(Show)
 
 super     :: ClassEnv -> Id -> [Id]
 super ce i = case classes ce Map.!? i of
@@ -390,11 +393,45 @@ instance Types Scheme where
   tv'     (Forall ks qt) = tv' qt
 
 quantify      :: Set.Set Tyvar -> Qual Type -> Scheme
-quantify vs qt = Forall ks (apply s qt)
+quantify vs qt = genSort $ Forall ks (apply s qt)
   where vs'  = Set.filter (`elem` vs) (tv qt)
         vs'' = Set.toList vs'
         ks   = kind <$> vs''
         s    = Map.fromList . zip vs'' $ TGen <$> [0..]
+
+genSort (Forall ks qt) =
+  let
+    (qt', m) = runState (genSort' qt) mempty
+    ixs = Perm.fromPermutation . Perm.inverse . Perm.toPermutationUnsafe $ (+1) <$> Map.elems m
+    ks' = (ks !!) . subtract 1 <$> ixs
+  in Forall ks' qt'
+
+type GSState = State (Map.Map Int Int)
+
+class GenSort a where
+  genSort' :: a -> GSState a
+
+instance GenSort Type where
+  genSort' (TGen n) = do
+    m <- get
+    case m Map.!? n of
+      Just n' -> return $ TGen n'
+      Nothing -> let n' = Map.size m in do
+        modify (Map.insert n n')
+        return $ TGen n'
+  genSort' (TAp t1 t2) =
+    liftA2 TAp (genSort' t1) (genSort' t2)
+  genSort' t = return t
+
+instance GenSort Pred where
+  genSort' (IsIn id qt) = IsIn id <$> genSort' qt
+
+instance GenSort (Qual Type) where
+  genSort' (ps :=> t) =
+    liftA2 (:=>) (genSort' ps) (genSort' t)
+
+instance GenSort a => GenSort [a] where
+  genSort' = traverse genSort'
 
 toScheme      :: Type -> Scheme
 toScheme t     = Forall [] ([] :=> t)
