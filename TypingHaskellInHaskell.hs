@@ -463,10 +463,8 @@ type TI = StateT TIState (Either String)
 instance MonadFail (Either String) where
   fail = Left
 
-runTI       :: TI a -> a
-runTI f = case evalStateT f $ TI nullSubst 0 of
-            Right a -> a
-            Left s -> error s
+runTI       :: TI a -> Either String a
+runTI f = evalStateT f $ TI nullSubst 0
 
 unify      :: Type -> Type -> TI ()
 unify t1 t2 = do s <- gets subst
@@ -721,7 +719,7 @@ tiSeq ti ce as (bs:bss) = do (ps, as')  <- ti ce as bs
 
 type Program = [BindGroup]
 
-tiProgram :: ClassEnv -> Map.Map Id Scheme -> Program -> Map.Map Id Scheme
+tiProgram :: ClassEnv -> Map.Map Id Scheme -> Program -> Either String (Map.Map Id Scheme)
 tiProgram ce as bgs = runTI $
                       do (ps, as') <- tiSeq tiBindGroup ce as bgs
                          s         <- gets subst
