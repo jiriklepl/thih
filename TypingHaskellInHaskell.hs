@@ -276,7 +276,7 @@ matchPred           = lift match
 
 lift m (IsIn i t) (IsIn i' t')
         | i == i'   = m t t'
-        | otherwise = fail "classes differ"
+        | otherwise = fail $ "classes `" ++ show i ++ "` and `" ++ show i' ++ "` differ"
 
 type Class    = ([Id], [Inst])
 type Inst     = Qual Pred
@@ -287,15 +287,17 @@ data ClassEnv = ClassEnv { classes  :: Map.Map Id Class,
                            defaults :: [Type] }
                 deriving(Show)
 
+-- TODO: should add a monad for propagating the error
 super     :: ClassEnv -> Id -> [Id]
 super ce i = case classes ce Map.!? i of
   Just (is, its) -> is
-  Nothing -> error "class not defined" -- TODO
+  Nothing -> error $ "class `" ++ show i ++ "` is not defined"
 
+-- TODO: should add a monad for propagating the error
 insts     :: ClassEnv -> Id -> [Inst]
 insts ce i = case classes ce Map.!? i of
   Just (is, its) -> its
-  Nothing -> error "class not defined" -- TODO
+  Nothing -> error $ "class `" ++ show i ++ "` is not defined"
 
 defined :: Maybe a -> Bool
 defined Just{} = True
@@ -317,7 +319,7 @@ infixr 5 <:>
 
 addClass                               :: Id -> [Id] -> EnvTransformer
 addClass i is ce
-  | defined (classes ce Map.!? i)                = fail "class already defined"
+  | defined (classes ce Map.!? i)                = fail $ "class `" ++ show i ++ "` is already defined"
   | not (all (defined . (classes ce Map.!?)) is) = fail "superclass not defined"
   | otherwise                                    = return (change ce i (is, []))
 
